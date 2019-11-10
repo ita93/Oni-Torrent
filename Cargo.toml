@@ -1,0 +1,19 @@
+[package]
+name = "o_torrent"
+version = "0.1.0"
+authors = ["Phi Nguyen <phind.uet@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+serde_bencode = "0.2.0"
+serde = "^1.0.0"
+serde_derive = "^1.0.0"
+serde_bytes = "0.11.2"
+tokio = "0.2.0-alpha.6"
+futures = "0.3.1"
+bincode = "1.2.0"
+rand = "0.7.2"
+url = "2.1.0"
+bit-vec = { version = "0.6.1", features = ["serde"]}
