@@ -4,8 +4,8 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_bytes;
 
-#[macro_use]
-extern crate futures;
+//#[macro_use]
+//extern crate futures;
 extern crate tokio;
 
 pub mod meta_info; //tracker information

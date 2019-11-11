@@ -29,10 +29,10 @@ struct ConnectResponse {
     connection_id: u64,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Debug)]
 struct AnnounceRequest {
     connection_id: u64,
-    action: u64,
+    action: u32,
     transaction_id: u32,
     info_hash: BitVec,
     peer_id: BitVec,
@@ -44,6 +44,16 @@ struct AnnounceRequest {
     key: u32,
     num_want: u32,
     port: u32,
+}
+
+#[derive(Deserialize, Debug)]
+struct AnnounceResponse {
+    action: u32,
+    transaction_id: u32,
+    interval: u32,
+    leechers: u32,
+    seeders: u32,
+    peers: Vec<(u32, u16)>, //(ip, port)
 }
 
 pub struct Tracker{
@@ -76,11 +86,13 @@ impl Tracker{
         };
 
         let encoded_pkt: Vec<u8> = bincode::config().big_endian().serialize(&request_pkt)?;
+        println!("Sending request");
         self.socket.send(&encoded_pkt).await?;
         let data_size = std::mem::size_of::<ConnectResponse>();
         let mut data = vec![0u8; data_size];
         let len = self.socket.recv(&mut data).await?;
         let decoded_pkt: ConnectResponse = bincode::config().big_endian().deserialize(&data)?;
+        println!("Connect response: {:?}", &decoded_pkt);
         //Finish connect, save connection_id for later using
         self.connection_id = Some(decoded_pkt.connection_id);
         Ok(())
