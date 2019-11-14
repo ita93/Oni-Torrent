@@ -1,15 +1,17 @@
+use bincode::serialize;
 use serde_bencode::de;
-use std::io::{self, Read};
 use serde_bytes::ByteBuf;
+use sha1::Sha1;
 use std::fs::File as FsFile;
 use std::io::prelude::*;
+use std::io::{self, Read};
 
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 
 #[derive(Debug, Deserialize)]
 struct Node(String, i64);
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct File {
     path: Vec<String>,
     length: i64,
@@ -17,11 +19,11 @@ struct File {
     md5sum: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Info {
     name: String,
     pieces: ByteBuf,
-    #[serde(rename="piece length")]
+    #[serde(rename = "piece length")]
     piece_length: i64,
     #[serde(default)]
     md5sum: Option<String>,
@@ -34,7 +36,7 @@ struct Info {
     #[serde(default)]
     path: Option<Vec<String>>,
     #[serde(default)]
-    #[serde(rename="root hash")]
+    #[serde(rename = "root hash")]
     root_hash: Option<String>,
 }
 
@@ -50,15 +52,15 @@ pub struct TorrentInfo {
     #[serde(default)]
     httpseeds: Option<Vec<String>>,
     #[serde(default)]
-    #[serde(rename="announce-list")]
+    #[serde(rename = "announce-list")]
     announce_list: Option<Vec<Vec<String>>>,
     #[serde(default)]
-    #[serde(rename="creation date")]
+    #[serde(rename = "creation date")]
     creation_date: Option<i64>,
-    #[serde(rename="comment")]
+    #[serde(rename = "comment")]
     comment: Option<String>,
     #[serde(default)]
-    #[serde(rename="created by")]
+    #[serde(rename = "created by")]
     created_by: Option<String>,
 }
 
@@ -95,27 +97,23 @@ impl TorrentInfo {
         let mut file = FsFile::open(file_name)?;
         //Expecting that the file size is not too large.
         //Normal meta info file should have a small size.
-        let mut buffer:Vec<u8>  = Vec::new();
+        let mut buffer: Vec<u8> = Vec::new();
         file.read_to_end(&mut buffer)?;
         let res = de::from_bytes::<TorrentInfo>(&buffer)?;
         Ok(res)
     }
 
-/*    pub fn get_announce_protocol(&self) -> Result<String> {
-        self.announce.as_ref().map(|s|{
-            String::from(*s.split(':').collect::<Vec<&str>>().first().unwrap())
-        }).ok_or(Error::NotSupportProtocol("Cannot read announce url".to_string()))
-    }
-*/
-
     pub fn get_announce(&self) -> String {
         match &self.announce {
-            Some(s) => {
-                s.clone()
-            }
-            _ => {
-                String::new()
-            }
+            Some(s) => s.clone(),
+            _ => String::new(),
         }
+    }
+
+    pub fn get_info_hash(&self) -> [u8; 20] {
+        //let encoded_pkt: Vec<u8> = bincode::config().big_endian().serialize(&self.info).unwrap();
+        let encoded_pkt = serde_bencode::to_bytes(&self.info).unwrap();
+        let hash_entity = Sha1::from(&encoded_pkt);
+        hash_entity.digest().bytes()
     }
 }

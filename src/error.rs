@@ -1,8 +1,8 @@
-use std::io::Error as StdIoError;
-use std::fmt;
-use serde_bencode::Error as BencodeError;
-use std::net::AddrParseError as AddrParserError;
 use bincode::Error as BincodeErrorKind;
+use serde_bencode::Error as BencodeError;
+use std::fmt;
+use std::io::Error as StdIoError;
+use std::net::AddrParseError as AddrParserError;
 use url::ParseError as EUrlParser;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -18,8 +18,8 @@ pub enum Error {
     Unknown,
 }
 
-impl From<StdIoError> for Error{
-    fn from(err: StdIoError) -> Error{
+impl From<StdIoError> for Error {
+    fn from(err: StdIoError) -> Error {
         Error::Io(err)
     }
 }
@@ -40,7 +40,6 @@ impl From<BincodeErrorKind> for Error {
     fn from(err: BincodeErrorKind) -> Error {
         Error::BincodeError(err)
     }
-
 }
 
 impl From<EUrlParser> for Error {
@@ -50,7 +49,7 @@ impl From<EUrlParser> for Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result<> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Error::Io(ref err) => err.fmt(f),
             Error::SerdeBencode(ref err) => err.fmt(f),

@@ -1,5 +1,5 @@
-extern crate serde_bencode;
 extern crate serde;
+extern crate serde_bencode;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_bytes;
@@ -8,6 +8,7 @@ extern crate serde_bytes;
 //extern crate futures;
 extern crate tokio;
 
-pub mod meta_info; //tracker information
 pub mod error;
+pub mod meta_info; //tracker information
 pub mod tracker;
+pub mod utils;

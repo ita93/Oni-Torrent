@@ -1,11 +1,12 @@
-use o_torrent::error::{Result, Error};
+use o_torrent::error::{Error, Result};
 use o_torrent::meta_info;
 use o_torrent::tracker;
 
 #[tokio::main]
-async fn main() -> Result<()>{
+async fn main() -> Result<()> {
     let sample = meta_info::TorrentInfo::from_file("big-buck-bunny.torrent")?;
-    let mut tracker = tracker::Tracker::from_url(sample.get_announce()).await?;
+    let mut tracker = tracker::Tracker::from_metainfo(&sample).await?;
     tracker.connect().await?;
+    tracker.annouce_request().await?;
     Ok(())
 }
