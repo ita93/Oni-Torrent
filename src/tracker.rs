@@ -5,11 +5,13 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 use tokio::prelude::*;
+use tokio::runtime::current_thread::Runtime;
 use url::Url;
 
 //modules in the same crate
 use crate::error::{Error, Result};
 use crate::meta_info::TorrentInfo;
+use crate::peer::Peer;
 use crate::utils::random_string;
 
 /*
@@ -52,7 +54,7 @@ struct AnnounceRequest {
 }
 
 #[derive(Deserialize, Debug)]
-struct IpAddr{
+struct IpAddr {
     ip: u32,
     port: u16,
 }
@@ -77,10 +79,9 @@ pub struct Tracker {
     seeder: u32,
     leecher: u32,
     interval: u32,
-    peers: Vec<String>
-    //    downloaded: u64,
-    //    left: u64,
-    //    peer_info: BitVec, //My information
+    peers: Vec<String>, //    downloaded: u64,
+                        //    left: u64,
+                        //    peer_info: BitVec, //My information
 }
 
 impl Tracker {
@@ -141,8 +142,11 @@ impl Tracker {
         self.connection_id = Some(decoded_pkt.connection_id);
         Ok(())
     }
-
-    pub async fn annouce_request(&mut self) -> Result<()> {
+    /// Function send request to tracker to get a list of swarms.
+    /// @param num_want: Number of peers that client want to receive from tracker (use -1 for
+    /// default)
+    /// @event: Can leave empty (0) or it need to be started, stopped, or completed
+    pub async fn annouce_request(&mut self, num_want: i32, event: u32) -> Result<()> {
         let mut rng = rand::thread_rng();
         let announce_request = AnnounceRequest {
             connection_id: self.connection_id.unwrap(),
@@ -153,21 +157,29 @@ impl Tracker {
             downloaded: self.downloaded,
             uploaded: self.uploaded,
             left: self.left,
-            event: 0,
+            event,
             ip_address: 0,
             key: rng.gen(),
-            num_want: -1,
+            num_want,
             port: 6881,
         };
-        
-        let encoded_pkt: Vec<u8> = bincode::config().big_endian().serialize(&announce_request)?;
+
+        let encoded_pkt: Vec<u8> = bincode::config()
+            .big_endian()
+            .serialize(&announce_request)?;
         println!("Sending announce request");
         self.socket.send(&encoded_pkt).await?;
         //Testing only
         let mut data = vec![0u8; 1024];
         let len = self.socket.recv(&mut data).await?;
-        let decoded_pkt: AnnounceResponse = bincode::config().big_endian().deserialize(&data[..20])?;
+        let decoded_pkt: AnnounceResponse =
+            bincode::config().big_endian().deserialize(&data[..20])?;
+        println!("The interval: {}", decoded_pkt.interval);
         let mut pos = 20;
+
+        //Separate
+        let peer_id = self.peer_id;
+        let hash_info = self.hash_info;
         loop {
             if pos >= len {
                 break;
@@ -179,10 +191,23 @@ impl Tracker {
             pos += 4;
             port_addr.copy_from_slice(&data[pos..pos + 2]);
             pos += 2;
-            let ip_str = ip_addr.to_vec().iter().enumerate().map(|(idx, val)| {
-                if idx < 3 { format!("{}.", val) } else { format!("{}", val) }
-            }).collect::<String>();
-            self.peers.push(format!("{}:{}", ip_str, u16::from_be_bytes(port_addr)));
+            let ip_str = ip_addr
+                .to_vec()
+                .iter()
+                .enumerate()
+                .map(|(idx, val)| {
+                    if idx < 3 {
+                        format!("{}.", val)
+                    } else {
+                        format!("{}", val)
+                    }
+                })
+                .collect::<String>();
+            tokio::spawn(async move {
+                let ip_addr = format!("{}:{}", ip_str, u16::from_be_bytes(port_addr));
+                let mut peer = Peer::new(&ip_addr);
+                peer.send_handshake(peer_id, hash_info).await;
+            });
         }
         Ok(())
     }

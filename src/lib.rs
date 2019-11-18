@@ -10,5 +10,6 @@ extern crate tokio;
 
 pub mod error;
 pub mod meta_info; //tracker information
+pub mod peer;
 pub mod tracker;
 pub mod utils;
