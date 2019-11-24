@@ -9,8 +9,6 @@ async fn main() -> Result<()> {
     let mut tracker = tracker::Tracker::from_metainfo(&sample).await?;
     tracker.connect().await?;
     tracker.annouce_request(-1, 0).await?;
-    loop{
-
-    }
+    loop {}
     Ok(())
 }

@@ -18,3 +18,4 @@ rand = "0.7.2"
 url = "2.1.0"
 bit-vec = { version = "0.6.1", features = ["serde"]}
 sha1 = "0.6.0"
+bytes = "0.4.12"

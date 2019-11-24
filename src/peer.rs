@@ -1,10 +1,14 @@
 use crate::error::{Error, Result};
+use crate::message::{Message, MessagePlayload, MessageCodec};
 use bincode::*;
 use serde::{Deserialize, Serialize};
-use tokio::{net::TcpStream, prelude::*};
-
+use tokio::{
+    codec::{FramedRead, FramedWrite},
+    net::TcpStream, 
+    prelude::*
+};
 /* Handshake msg */
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct HandshakeMsg {
     pstr: String,
     reserved: [u8; 8],
@@ -38,7 +42,32 @@ impl Peer {
         encoded.drain(..7);
         let mut stream = TcpStream::connect(&self.ip_addr).await?;
         stream.write_all(encoded.as_ref()).await?;
+        //Handle handshake here?
+        self.handle_connection(&mut stream).await?;
+        println!("I want you to finish here for {}", &self.ip_addr);
+        Ok(())
+    }
 
+    pub async fn handle_connection(&mut self, mut stream: &mut TcpStream) -> Result<()> {
+        let mut data = [0u8; 68];
+        match stream.read(&mut data).await {
+            Ok(_) => {
+                // Suppose that we received correct handshake message first.
+                //Trying
+                let (r, w) = stream.split();
+                let mut reader = FramedRead::new(r, MessageCodec::new());
+                let mut writer = FramedWrite::new(w, MessageCodec::new());
+                while let Some(Ok(value)) = reader.next().await {
+                    println!("{} : id = {:?} {:#x?}", &self.ip_addr, value.id, value.payload);
+                    //try to request a piece
+                    let msg = Message::new(13, Some(6), MessagePlayload::Request(0, 0, 16384));
+                    writer.send(msg).await;
+                }
+            }
+            _ => {
+                println!("Failed");
+            }
+        };
         Ok(())
     }
 }

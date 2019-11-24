@@ -9,8 +9,8 @@ extern crate serde_bytes;
 extern crate tokio;
 
 pub mod error;
+pub mod message;
 pub mod meta_info; //tracker information
 pub mod peer;
 pub mod tracker;
 pub mod utils;
-pub mod message;
