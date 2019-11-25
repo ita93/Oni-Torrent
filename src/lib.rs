@@ -14,3 +14,4 @@ pub mod meta_info; //tracker information
 pub mod peer;
 pub mod tracker;
 pub mod utils;
+pub mod torrent_instance;

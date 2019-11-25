@@ -7,6 +7,7 @@ use tokio::{
     net::TcpStream, 
     prelude::*
 };
+use bit_vec::BitVec;
 /* Handshake msg */
 #[derive(Debug, Serialize, Deserialize)]
 struct HandshakeMsg {
@@ -18,6 +19,7 @@ struct HandshakeMsg {
 
 pub struct Peer {
     ip_addr: String,
+    bit_field: BitVec,
 }
 
 impl Peer {
@@ -25,6 +27,7 @@ impl Peer {
         println!("New peer: {}", ip_addr);
         Self {
             ip_addr: ip_addr.to_string(),
+            bit_field: BitVec::new(),
         }
     }
 
@@ -58,10 +61,13 @@ impl Peer {
                 let mut reader = FramedRead::new(r, MessageCodec::new());
                 let mut writer = FramedWrite::new(w, MessageCodec::new());
                 while let Some(Ok(value)) = reader.next().await {
-                    println!("{} : id = {:?} {:#x?}", &self.ip_addr, value.id, value.payload);
+                    // Don't need to care about keep alive message.
+                    self.handle_message(value);
                     //try to request a piece
+                    /*
                     let msg = Message::new(13, Some(6), MessagePlayload::Request(0, 0, 16384));
                     writer.send(msg).await;
+                    */
                 }
             }
             _ => {
@@ -69,5 +75,33 @@ impl Peer {
             }
         };
         Ok(())
+    }
+
+    fn handle_message(&mut self, received_msg: Message) {
+        match received_msg.payload {
+            MessagePlayload::BitField(new_bit_field) => {
+                self.bit_field = new_bit_field;
+            },
+            MessagePlayload::Have(pie_idx) => {
+                self.bit_field.set(pie_idx as usize, true);
+            },
+            MessagePlayload::Empty => {
+                //Mean something, i don't know    
+                            
+            },
+            MessagePlayload::Cancel(pie_idx, begin, length) => {
+                // Remove a task from job queue and ignore all related reply.
+            },
+            MessagePlayload::Request(pie_idx, begin, length) => {
+                // Seeder role: reply by a data block: MessagePayload::Piece
+            },
+            MessagePlayload::Piece(pie_idx, begin, data) => {
+                // Write to disk, update manager and broadcast a MessagePayload::Have
+                // TODO: How to sync Offline field for all Peer?
+            },
+            MessagePlayload::Port(port) => {
+                //We have nothing to do here. I won't support it.
+            }
+        }
     }
 }

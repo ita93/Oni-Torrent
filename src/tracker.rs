@@ -142,11 +142,12 @@ impl Tracker {
         self.connection_id = Some(decoded_pkt.connection_id);
         Ok(())
     }
+
     /// Function send request to tracker to get a list of swarms.
     /// @param num_want: Number of peers that client want to receive from tracker (use -1 for
     /// default)
     /// @event: Can leave empty (0) or it need to be started, stopped, or completed
-    pub async fn annouce_request(&mut self, num_want: i32, event: u32) -> Result<()> {
+    pub async fn announce_request(&mut self, num_want: i32, event: u32) -> Result<()> {
         let mut rng = rand::thread_rng();
         let announce_request = AnnounceRequest {
             connection_id: self.connection_id.unwrap(),
@@ -178,8 +179,6 @@ impl Tracker {
         let mut pos = 20;
 
         //Separate
-        let peer_id = self.peer_id;
-        let hash_info = self.hash_info;
         loop {
             if pos >= len {
                 break;
@@ -203,12 +202,27 @@ impl Tracker {
                     }
                 })
                 .collect::<String>();
+            /*
             tokio::spawn(async move {
                 let ip_addr = format!("{}:{}", ip_str, u16::from_be_bytes(port_addr));
                 let mut peer = Peer::new(&ip_addr);
                 peer.send_handshake(peer_id, hash_info).await;
             });
+            */
+            self.peers.push(format!("{}:{}", ip_str, u16::from_be_bytes(port_addr)));
         }
         Ok(())
+    }
+
+    pub fn get_peers(&self) -> &Vec<String> {
+        self.peers.as_ref()
+    }
+    
+    pub fn get_peer_id(&self) -> [u8; 20] {
+        self.peer_id
+    }
+
+    pub fn get_hash_info(&self) -> [u8; 20] {
+        self.hash_info
     }
 }
