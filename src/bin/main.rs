@@ -1,8 +1,8 @@
 use o_torrent::error::{Error, Result};
 use o_torrent::meta_info;
 use o_torrent::peer;
-use o_torrent::tracker;
 use o_torrent::torrent_instance;
+use o_torrent::tracker;
 
 #[tokio::main]
 async fn main() -> Result<()> {

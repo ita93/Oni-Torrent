@@ -1,13 +1,14 @@
 use crate::error::{Error, Result};
-use crate::message::{Message, MessagePlayload, MessageCodec};
+use crate::message::{Message, MessageCodec, MessagePlayload};
 use bincode::*;
-use serde::{Deserialize, Serialize};
-use tokio::{
-    codec::{FramedRead, FramedWrite},
-    net::TcpStream, 
-    prelude::*
-};
 use bit_vec::BitVec;
+use serde::{Deserialize, Serialize};
+use tokio::{net::TcpStream, prelude::*};
+use tokio_util::codec::{FramedRead, FramedWrite};
+//use futures_util::stream::stream::StreamExt;
+use futures::stream::StreamExt;
+use priority_queue::PriorityQueue;
+
 /* Handshake msg */
 #[derive(Debug, Serialize, Deserialize)]
 struct HandshakeMsg {
@@ -24,11 +25,14 @@ pub struct Peer {
 
 impl Peer {
     pub fn new(ip_addr: &str) -> Peer {
-        println!("New peer: {}", ip_addr);
         Self {
             ip_addr: ip_addr.to_string(),
             bit_field: BitVec::new(),
         }
+    }
+
+    pub fn get_bit_field(&self) -> &BitVec {
+        &self.bit_field
     }
 
     //[u8; 20] implemented Copy trait
@@ -40,19 +44,21 @@ impl Peer {
             peer_id,
         };
         let mut encoded: Vec<u8> = bincode::config().big_endian().serialize(&hsm)?;
+
         //bincode will use 64bit to encode a string length, but we only need 1 byte,
         //so remove first seven bytes.
+
         encoded.drain(..7);
         let mut stream = TcpStream::connect(&self.ip_addr).await?;
         stream.write_all(encoded.as_ref()).await?;
         //Handle handshake here?
         self.handle_connection(&mut stream).await?;
-        println!("I want you to finish here for {}", &self.ip_addr);
         Ok(())
     }
 
     pub async fn handle_connection(&mut self, mut stream: &mut TcpStream) -> Result<()> {
         let mut data = [0u8; 68];
+
         match stream.read(&mut data).await {
             Ok(_) => {
                 // Suppose that we received correct handshake message first.
@@ -81,24 +87,28 @@ impl Peer {
         match received_msg.payload {
             MessagePlayload::BitField(new_bit_field) => {
                 self.bit_field = new_bit_field;
-            },
+                println!(
+                    "Updated {} fields for {}",
+                    self.bit_field.len(),
+                    &self.ip_addr
+                );
+            }
             MessagePlayload::Have(pie_idx) => {
                 self.bit_field.set(pie_idx as usize, true);
-            },
+            }
             MessagePlayload::Empty => {
-                //Mean something, i don't know    
-                            
-            },
+                //Mean something, i don't know
+            }
             MessagePlayload::Cancel(pie_idx, begin, length) => {
-                // Remove a task from job queue and ignore all related reply.
-            },
+                // Seeder role: Remove a task from job queue and ignore all related reply.
+            }
             MessagePlayload::Request(pie_idx, begin, length) => {
                 // Seeder role: reply by a data block: MessagePayload::Piece
-            },
+            }
             MessagePlayload::Piece(pie_idx, begin, data) => {
                 // Write to disk, update manager and broadcast a MessagePayload::Have
                 // TODO: How to sync Offline field for all Peer?
-            },
+            }
             MessagePlayload::Port(port) => {
                 //We have nothing to do here. I won't support it.
             }

@@ -116,4 +116,19 @@ impl TorrentInfo {
         let hash_entity = Sha1::from(&encoded_pkt);
         hash_entity.digest().bytes()
     }
+
+    pub fn get_piece_amount(&self) -> usize {
+        let total_length = match self.info.length {
+            Some(val) => val,
+            None => {
+                //It means we are having multiple files
+                match &self.info.files {
+                    Some(files) => files.iter().fold(0, |acc, file| acc + file.length),
+                    None => 0,
+                }
+            }
+        };
+
+        (total_length as f64 / self.info.piece_length as f64) as usize
+    }
 }

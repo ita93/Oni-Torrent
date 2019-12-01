@@ -1,9 +1,9 @@
 use bit_vec::BitVec;
-use bytes::{BytesMut,BufMut};
-use tokio::codec::{Decoder, Encoder};
+use bytes::{BufMut, BytesMut};
 use tokio::io::AsyncRead;
 use tokio::io::{self, BufReader};
 use tokio::prelude::*;
+use tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::{Error, Result};
 
@@ -61,37 +61,37 @@ impl Encoder for MessageCodec {
     type Error = io::Error;
 
     fn encode(&mut self, msg: Message, buf: &mut BytesMut) -> io::Result<()> {
-        buf.put_u32_be(msg.len as u32);
+        buf.put_u32(msg.len as u32);
         if let Some(val) = msg.id {
             buf.put_u8(val);
-            
+
             //Suppose that id and payload are matched.
             match msg.payload {
                 MessagePlayload::BitField(bit_field) => {
-                    buf.put(bit_field.to_bytes());
-                },
+                    buf.put(&bit_field.to_bytes()[..]);
+                }
                 MessagePlayload::Have(pie_index) => {
-                    buf.put_u32_be(pie_index);
-                },
+                    buf.put_u32(pie_index);
+                }
                 MessagePlayload::Request(index, begin, length) => {
-                    buf.put_u32_be(index);
-                    buf.put_u32_be(begin);
-                    buf.put_u32_be(length);
-                },
+                    buf.put_u32(index);
+                    buf.put_u32(begin);
+                    buf.put_u32(length);
+                }
                 MessagePlayload::Piece(index, begin, data) => {
-                    buf.put_u32_be(index);
-                    buf.put_u32_be(begin);
-                    buf.put(data);
-                },
+                    buf.put_u32(index);
+                    buf.put_u32(begin);
+                    buf.put(&data[..]);
+                }
                 MessagePlayload::Cancel(index, begin, length) => {
-                    buf.put_u32_be(index);
-                    buf.put_u32_be(begin);
-                    buf.put_u32_be(length);
-                },
+                    buf.put_u32(index);
+                    buf.put_u32(begin);
+                    buf.put_u32(length);
+                }
                 MessagePlayload::Port(port) => {
-                    buf.put_u16_be(port);
-                },
-                MessagePlayload::Empty => {/*Do nothing*/}, 
+                    buf.put_u16(port);
+                }
+                MessagePlayload::Empty => { /*Do nothing*/ }
             }
         }
 
@@ -148,11 +148,12 @@ impl Decoder for MessageCodec {
             }
             raw_id @ 5 => {
                 // Bit field
+                // crash here?
                 let bit_field = BitVec::from_bytes(&buf.split_to(len - 1));
                 let actual_len = bit_field.to_bytes().len();
                 if actual_len != (len - 1) {
                     self.id = Some(raw_id);
-                    self.len = len; 
+                    self.len = len;
                     Ok(None)
                 } else {
                     Ok(Some(Message::new(

@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tokio::net::UdpSocket;
 use tokio::prelude::*;
-use tokio::runtime::current_thread::Runtime;
 use url::Url;
 
 //modules in the same crate
@@ -209,7 +208,8 @@ impl Tracker {
                 peer.send_handshake(peer_id, hash_info).await;
             });
             */
-            self.peers.push(format!("{}:{}", ip_str, u16::from_be_bytes(port_addr)));
+            self.peers
+                .push(format!("{}:{}", ip_str, u16::from_be_bytes(port_addr)));
         }
         Ok(())
     }
@@ -217,7 +217,7 @@ impl Tracker {
     pub fn get_peers(&self) -> &Vec<String> {
         self.peers.as_ref()
     }
-    
+
     pub fn get_peer_id(&self) -> [u8; 20] {
         self.peer_id
     }
