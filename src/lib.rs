@@ -15,3 +15,4 @@ pub mod peer;
 pub mod torrent_instance;
 pub mod tracker;
 pub mod utils;
+pub mod signal;

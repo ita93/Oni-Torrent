@@ -9,6 +9,7 @@ use bit_vec::BitVec;
 use priority_queue::PriorityQueue;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tokio::sync::mpsc;
 
 pub struct TorrentInstance {
     tracker: Tracker,
@@ -31,17 +32,29 @@ impl TorrentInstance {
         self.tracker.connect().await?;
         self.tracker.announce_request(num_want, event).await?;
 
+        let (tx, mut rx) = mpsc::unbounded_channel();
+
         for peer_addr in self.tracker.get_peers() {
             let ip_addr = peer_addr.to_string();
             let peer_id = self.tracker.get_peer_id();
             let hash_info = self.tracker.get_hash_info();
+            
+            let peer_tx = tx.clone();
 
             tokio::spawn(async move {
-                let mut peer = Peer::new(&ip_addr);
+                let mut peer = Peer::new(&ip_addr, peer_tx);
                 peer.send_handshake(peer_id, hash_info).await;
             });
         }
 
+        while let Some(msg) = rx.recv().await {
+
+        }
+
         Ok(())
+    }
+
+    fn update_priority(bit_field: &BitVec) {
+            
     }
 }

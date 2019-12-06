@@ -1,10 +1,12 @@
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageCodec, MessagePlayload};
+use crate::signal::Signal;
 use bincode::*;
 use bit_vec::BitVec;
 use serde::{Deserialize, Serialize};
 use tokio::{net::TcpStream, prelude::*};
 use tokio_util::codec::{FramedRead, FramedWrite};
+use tokio::sync::mpsc::UnboundedSender;
 //use futures_util::stream::stream::StreamExt;
 use futures::stream::StreamExt;
 use priority_queue::PriorityQueue;
@@ -21,13 +23,15 @@ struct HandshakeMsg {
 pub struct Peer {
     ip_addr: String,
     bit_field: BitVec,
+    signal_slot: UnboundedSender<Signal>,
 }
 
 impl Peer {
-    pub fn new(ip_addr: &str) -> Peer {
+    pub fn new(ip_addr: &str, signal_slot: UnboundedSender<Signal>) -> Peer {
         Self {
             ip_addr: ip_addr.to_string(),
             bit_field: BitVec::new(),
+            signal_slot,
         }
     }
 
@@ -87,6 +91,8 @@ impl Peer {
         match received_msg.payload {
             MessagePlayload::BitField(new_bit_field) => {
                 self.bit_field = new_bit_field;
+                self.signal_slot.send(Signal::Bitfield);
+
                 println!(
                     "Updated {} fields for {}",
                     self.bit_field.len(),
@@ -95,6 +101,7 @@ impl Peer {
             }
             MessagePlayload::Have(pie_idx) => {
                 self.bit_field.set(pie_idx as usize, true);
+                self.signal_slot.send(Signal::Have(pie_idx as usize)); 
             }
             MessagePlayload::Empty => {
                 //Mean something, i don't know
@@ -111,6 +118,10 @@ impl Peer {
             }
             MessagePlayload::Port(port) => {
                 //We have nothing to do here. I won't support it.
+                self.signal_slot.send(Signal::Port(port));
+            }
+            _ => {
+                self.signal_slot.send(Signal::Unknown);
             }
         }
     }

@@ -149,6 +149,9 @@ impl Decoder for MessageCodec {
             raw_id @ 5 => {
                 // Bit field
                 // crash here?
+                if len - 1 > buf.len() {
+                    return Ok(None);
+                }
                 let bit_field = BitVec::from_bytes(&buf.split_to(len - 1));
                 let actual_len = bit_field.to_bytes().len();
                 if actual_len != (len - 1) {
