@@ -12,11 +12,11 @@ use crate::error::{Error, Result};
 struct Node(String, i64);
 
 #[derive(Debug, Serialize, Deserialize)]
-struct File {
-    path: Vec<String>,
-    length: i64,
+pub struct File {
+    pub path: Vec<String>,
+    pub length: i64,
     #[serde(default)]
-    md5sum: Option<String>,
+    pub md5sum: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -118,7 +118,9 @@ impl TorrentInfo {
     }
 
     pub fn get_piece_amount(&self) -> usize {
-        let total_length = match self.info.length {
+        // 20 bytes per piece
+        self.info.pieces.len() / 20
+        /*let total_length = match self.info.length {
             Some(val) => val,
             None => {
                 //It means we are having multiple files
@@ -130,5 +132,6 @@ impl TorrentInfo {
         };
 
         (total_length as f64 / self.info.piece_length as f64) as usize
+        */
     }
 }

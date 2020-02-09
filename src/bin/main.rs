@@ -13,6 +13,5 @@ async fn main() -> Result<()> {
     */
     let mut instance = torrent_instance::TorrentInstance::new("big-buck-bunny.torrent").await?;
     instance.update_announce(-1i32, 0u32).await?;
-    loop {}
     Ok(())
 }

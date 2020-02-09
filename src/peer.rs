@@ -1,12 +1,15 @@
 use crate::error::{Error, Result};
 use crate::message::{Message, MessageCodec, MessagePlayload};
 use crate::signal::Signal;
+use crate::downloader::Downloader;
+
+use std::sync::{Arc, Mutex};
 use bincode::*;
 use bit_vec::BitVec;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::{net::TcpStream, prelude::*};
 use tokio_util::codec::{FramedRead, FramedWrite};
-use tokio::sync::mpsc::UnboundedSender;
 //use futures_util::stream::stream::StreamExt;
 use futures::stream::StreamExt;
 use priority_queue::PriorityQueue;
@@ -24,14 +27,16 @@ pub struct Peer {
     ip_addr: String,
     bit_field: BitVec,
     signal_slot: UnboundedSender<Signal>,
+    download_mutex: Arc<Mutex<Downloader>>,
 }
 
 impl Peer {
-    pub fn new(ip_addr: &str, signal_slot: UnboundedSender<Signal>) -> Peer {
+    pub fn new(ip_addr: &str, signal_slot: UnboundedSender<Signal>, download_mutex: Arc<Mutex<Downloader>>) -> Peer {
         Self {
             ip_addr: ip_addr.to_string(),
             bit_field: BitVec::new(),
             signal_slot,
+            download_mutex,
         }
     }
 
@@ -84,24 +89,19 @@ impl Peer {
                 println!("Failed");
             }
         };
+        println!("We did get here for: {}", &self.ip_addr);
         Ok(())
     }
 
     fn handle_message(&mut self, received_msg: Message) {
         match received_msg.payload {
             MessagePlayload::BitField(new_bit_field) => {
+                self.download_mutex.lock().unwrap().update_priority(new_bit_field.clone());
                 self.bit_field = new_bit_field;
-                self.signal_slot.send(Signal::Bitfield);
-
-                println!(
-                    "Updated {} fields for {}",
-                    self.bit_field.len(),
-                    &self.ip_addr
-                );
             }
             MessagePlayload::Have(pie_idx) => {
                 self.bit_field.set(pie_idx as usize, true);
-                self.signal_slot.send(Signal::Have(pie_idx as usize)); 
+                self.signal_slot.send(Signal::Have(pie_idx as usize));
             }
             MessagePlayload::Empty => {
                 //Mean something, i don't know
