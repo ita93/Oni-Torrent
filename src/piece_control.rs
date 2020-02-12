@@ -1,36 +1,15 @@
-use sha1::Sha1;
 use std::collections::HashMap;
-
-use crate::meta_info::TorrentInfo;
-pub const BLOCKSIZE:u64 = 16384;
-
-#[derive(Clone)]
-pub struct Block{
-    index: u64,
-    length: u64,
-    downloaded: bool,
-}
-
-impl Block{
-    fn new(index: u64, length: u64) -> Self{
-        Self{
-            index,
-            length,
-            downloaded: false,
-        }
-    }
-}
 
 // It should just a structure to store piece position only.
 // Because pieces are not always downloading.
-pub struct PiecePos{
+struct PiecePos{
    peer_count: usize,
    complete: bool,
    piece_list_idx: usize,
 }
 
 impl PiecePos {
-    pub fn new(piece_idx: usize) -> Self {
+    fn new(piece_idx: usize) -> Self {
         Self{
             peer_count: 0,
             complete: false,
@@ -39,36 +18,36 @@ impl PiecePos {
     }
 
     /// Increase peer count by one, and also return the new peer count value of this piece
-    pub fn increase_count(&mut self) -> usize {
+    fn increase_count(&mut self) -> usize {
         self.peer_count += 1;
         self.peer_count
     }
 
     /// Decrease peer count by one, and also return the new peer count value of this piece
-    pub fn decrease_count(&mut self) -> usize {
+    fn decrease_count(&mut self) -> usize {
         self.peer_count -= 1;
         self.peer_count
     }
 
     /// Set position of this piece in piece_list
-    pub fn set_list_idx(&mut self, list_idx: usize) {
+    fn set_list_idx(&mut self, list_idx: usize) {
         self.piece_list_idx = list_idx;
     }
 
     /// Get current position in piece_list
-    pub fn get_list_idx(&self) -> usize {
+    fn get_list_idx(&self) -> usize {
         self.piece_list_idx
     }
 
-    pub fn is_complete(&self) -> bool {
+    fn is_complete(&self) -> bool {
         self.complete
     }
 
-    pub fn get_peer_count(&self) -> usize {
+    fn get_peer_count(&self) -> usize {
         self.peer_count
     }
 
-    pub fn set_complete(&mut self) {
+    fn set_complete(&mut self) {
         self.complete = true;
     }
 }

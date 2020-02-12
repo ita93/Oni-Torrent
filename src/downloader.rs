@@ -1,12 +1,33 @@
 use crate::meta_info::TorrentInfo;
+
+use sha1::Sha1;
 use priority_queue::PriorityQueue;
 use bit_vec::BitVec;
 use std::collections::HashMap;
+pub const BLOCKSIZE:u64 = 16384;
 //use sha1::Sha1;
 
 //pub const BLOCKSIZE:u64 = 16384;
 /// At any time the are at most 10 pieces in downloading map.
 const MAX_NO_PIECES: usize = 10;
+
+#[derive(Clone)]
+pub struct Block{
+    index: u64,
+    length: u64,
+    downloaded: bool,
+}
+
+impl Block{
+    fn new(index: u64, length: u64) -> Self{
+        Self{
+            index,
+            length,
+            downloaded: false,
+        }
+    }
+}
+
 
 struct DownloadingPiece {
 
