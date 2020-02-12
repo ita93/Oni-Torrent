@@ -16,4 +16,4 @@ pub mod signal;
 pub mod torrent_instance;
 pub mod tracker;
 mod utils;
-mod piece;
+mod piece_control;

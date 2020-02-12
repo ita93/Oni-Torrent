@@ -3,15 +3,18 @@ use priority_queue::PriorityQueue;
 use bit_vec::BitVec;
 use std::collections::HashMap;
 //use sha1::Sha1;
-use crate::piece::Piece;
 
 //pub const BLOCKSIZE:u64 = 16384;
 /// At any time the are at most 10 pieces in downloading map.
 const MAX_NO_PIECES: usize = 10;
 
+struct DownloadingPiece {
+
+}
+
 pub struct Downloader {
     piece_priorities: PriorityQueue<usize, usize>,
-    downloading: HashMap<usize, Piece>,
+    downloading: HashMap<usize, DownloadingPiece>,
 }
 
 impl Downloader {
