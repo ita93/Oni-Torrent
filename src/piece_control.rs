@@ -1,19 +1,27 @@
 use std::collections::HashMap;
+use bit_vec::BitVec;
 
+#[derive(PartialEq)]
+enum PieceStatus {
+    HAVE,
+    NOTYET,
+    PICKED, //mean it has been picked and being downling.
+}
 // It should just a structure to store piece position only.
-// Because pieces are not always downloading.
+// Because pieces are not always downloadin/
+
 struct PiecePos{
    peer_count: usize,
-   complete: bool,
    piece_list_idx: usize,
+   pub piece_status: PieceStatus,
 }
 
 impl PiecePos {
     fn new(piece_idx: usize) -> Self {
         Self{
             peer_count: 0,
-            complete: false,
             piece_list_idx: piece_idx,
+            piece_status: PieceStatus::NOTYET,
         }
     }
 
@@ -39,17 +47,10 @@ impl PiecePos {
         self.piece_list_idx
     }
 
-    fn is_complete(&self) -> bool {
-        self.complete
-    }
-
     fn get_peer_count(&self) -> usize {
         self.peer_count
     }
 
-    fn set_complete(&mut self) {
-        self.complete = true;
-    }
 }
 
 /// This structure will contain lists of pieces
@@ -129,14 +130,27 @@ impl PieceControler {
         self.piece_list.len()
     }
     
-    pub fn get_next_piece(&self) -> Option<usize> {
-        self.piece_list.iter().position(|&x| {
-            self.piece_map[x].get_peer_count() > 0 && !self.piece_map[x].is_complete()
+    pub fn get_next_piece(&self, peer_bitfield: &BitVec) -> Option<usize> {
+        /*self.piece_list.iter().find_map(|&x| {
+            self.piece_map[x].get_peer_count() > 0 && self.piece_map[x].piece_status == PieceStatus::NOTYET
+        })*/
+
+        self.piece_list.iter().find_map(|&x| {
+            if let Some(check) = peer_bitfield.get(x) {
+                if check ==true && self.piece_map[x].piece_status == PieceStatus::NOTYET {
+                    return Some(x);
+                }
+            }
+            None
         })
     }
 
     pub fn set_piece_complete(&mut self, piece_idx: usize) {
-        self.piece_map[piece_idx].set_complete();
+        self.piece_map[piece_idx].piece_status = PieceStatus::HAVE;
+    }
+
+    pub fn set_piece_picked(&mut self, piece_idx: usize) {
+        self.piece_map[piece_idx].piece_status = PieceStatus::PICKED;
     }
 }
 
@@ -149,7 +163,7 @@ mod tests {
     fn check_no_entries() {
         let meta_file = meta_info::TorrentInfo::from_file("big-buck-bunny.torrent").unwrap();
         let piece_control = PieceControler::new(&meta_file);
-        assert_eq!(meta_file.get_piece_amount(), piece_control.get_no_entries(), "The piece amount is not match");
+        assert_eq!(meta_file.get_number_of_piece(), piece_control.get_no_entries(), "The piece amount is not match");
     }*/
     
     #[test] 

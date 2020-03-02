@@ -8,10 +8,10 @@ use std::io::{self, Read};
 
 use crate::error::{Error, Result};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct Node(String, i64);
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct File {
     pub path: Vec<String>,
     pub length: i64,
@@ -19,7 +19,7 @@ pub struct File {
     pub md5sum: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Info {
     name: String,
     pieces: ByteBuf,
@@ -40,7 +40,7 @@ struct Info {
     root_hash: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct TorrentInfo {
     info: Info,
     #[serde(default)]
@@ -117,7 +117,7 @@ impl TorrentInfo {
         hash_entity.digest().bytes()
     }
 
-    pub fn get_piece_amount(&self) -> usize {
+    pub fn get_number_of_pieces(&self) -> usize {
         // 20 bytes per piece
         self.info.pieces.len() / 20
         /*let total_length = match self.info.length {
@@ -133,5 +133,29 @@ impl TorrentInfo {
 
         (total_length as f64 / self.info.piece_length as f64) as usize
         */
+    }
+
+    pub fn get_total_length(&self) -> i64 {
+        let total_length = match self.info.length {
+            Some(val) => val,
+            None => {
+                //It means we are having multiple files
+                match &self.info.files {
+                    Some(files) => files.iter().fold(0, |acc, file| acc + file.length),
+                    None => 0,
+                }
+            }
+        };
+        total_length
+    }
+    
+    /// Return how many bytes a piece is holding
+    pub fn get_piece_length(&self, piece_idx: usize) -> u32 {
+        (if (piece_idx + 1) != self.get_number_of_pieces() {
+            self.info.piece_length
+        } else {
+            //last piece
+            self.get_total_length() - self.info.piece_length * (self.get_number_of_pieces() as i64 - 1)
+        }) as u32
     }
 }

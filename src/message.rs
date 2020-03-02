@@ -7,6 +7,8 @@ use tokio_util::codec::{Decoder, Encoder};
 
 use crate::error::{Error, Result};
 
+const PIECE_MSG_PREFIX_LENGTH: usize = 8;
+
 #[derive(Debug)]
 pub enum MessagePlayload {
     Have(u32),                // <piece index>
@@ -15,6 +17,10 @@ pub enum MessagePlayload {
     Piece(u32, u32, Vec<u8>), //<index><begin><data block>
     Cancel(u32, u32, u32),    //<index><begin><length>
     Port(u16),                //<port>
+    Choke,
+    UnChoke,
+    Interest,
+    NotInterest,
     Empty,
 }
 
@@ -91,7 +97,7 @@ impl Encoder for MessageCodec {
                 MessagePlayload::Port(port) => {
                     buf.put_u16(port);
                 }
-                MessagePlayload::Empty => { /*Do nothing*/ }
+                _ => { /*Do nothing*/ } //Choke, Unchoke, Interest and Non-interest don't have payload.
             }
         }
 
@@ -112,22 +118,51 @@ impl Decoder for MessageCodec {
                     return Ok(None);
                 }
                 let mut msg_len: [u8; 4] = std::default::Default::default();
-                msg_len.copy_from_slice(buf.split_to(4).as_ref());
+                msg_len.copy_from_slice(buf[..4].as_ref());
                 let len = u32::from_be_bytes(msg_len) as usize;
-                if len == 0 {
-                    //keep alive
-                    return Ok(Some(Message::new(0, None, MessagePlayload::Empty)));
+                match len {
+                    0 => {
+                        buf.split_to(4);
+                        return Ok(Some(Message::new(0, None, MessagePlayload::Empty)));
+                    },
+                    _ if buf.len() < 5 => {
+                        return Ok(None);
+                    },
+                    _ => {
+                        buf.split_to(4);
+                        let id = buf.split_to(1);
+                        (id[0], len)
+                    }
                 }
-
-                let id = buf.split_to(1);
-                (id[0], len)
             }
         };
 
-        self.id = None;
+        
+        //Only process if we had received data fully.
+        if len - 1 > buf.len() {
+            self.id = Some(id);
+            self.len = len;
+            return Ok(None);
+        } else {
+            self.id = None;
+        }
 
         match id {
-            raw_id @ 0..=3 => {
+            raw_id @ 0 => {
+                Ok(Some(Message::new(
+                    len,
+                    Some(raw_id),
+                    MessagePlayload::Choke,
+                )))
+            }
+            raw_id @ 1 => {
+                Ok(Some(Message::new(
+                    len,
+                    Some(raw_id),
+                    MessagePlayload::UnChoke,
+                )))
+            }
+            raw_id @ 2..=3 => {
                 //No payload team
                 Ok(Some(Message::new(
                     len,
@@ -148,23 +183,12 @@ impl Decoder for MessageCodec {
             }
             raw_id @ 5 => {
                 // Bit field
-                // crash here?
-                if len - 1 > buf.len() {
-                    return Ok(None);
-                }
                 let bit_field = BitVec::from_bytes(&buf.split_to(len - 1));
-                let actual_len = bit_field.to_bytes().len();
-                if actual_len != (len - 1) {
-                    self.id = Some(raw_id);
-                    self.len = len;
-                    Ok(None)
-                } else {
-                    Ok(Some(Message::new(
-                        len,
-                        Some(raw_id),
-                        MessagePlayload::BitField(bit_field),
-                    )))
-                }
+                Ok(Some(Message::new(
+                    len,
+                    Some(raw_id),
+                    MessagePlayload::BitField(bit_field),
+                )))
             }
             raw_id @ 6 => {
                 // Request for a block of piece
@@ -186,6 +210,7 @@ impl Decoder for MessageCodec {
             }
             raw_id @ 7 => {
                 // Data block
+                // Only read when we received enough message.
                 let mut temp: [u8; 4] = std::default::Default::default();
                 temp.copy_from_slice(&buf.split_to(4));
                 let index = u32::from_be_bytes(temp);
@@ -196,7 +221,7 @@ impl Decoder for MessageCodec {
                 Ok(Some(Message::new(
                     len,
                     Some(raw_id),
-                    MessagePlayload::Piece(index, begin, buf.to_vec()),
+                    MessagePlayload::Piece(index, begin, buf.split_to(len - 9).to_vec()),
                 )))
             }
 

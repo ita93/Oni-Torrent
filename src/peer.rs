@@ -8,11 +8,15 @@ use bincode::*;
 use bit_vec::BitVec;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::UnboundedSender;
-use tokio::{net::TcpStream, prelude::*};
+use tokio::prelude::*;
+use tokio::net::{TcpStream, tcp::WriteHalf};
 use tokio_util::codec::{FramedRead, FramedWrite};
-//use futures_util::stream::stream::StreamExt;
+use futures_util::sink::SinkExt;
 use futures::stream::StreamExt;
 use priority_queue::PriorityQueue;
+
+/*-----------------------------------Start stuff for this file here ----------------------------------------------*/
+const MAXIMUM_REQUEST:i32 = 20;
 
 /* Handshake msg */
 #[derive(Debug, Serialize, Deserialize)]
@@ -28,6 +32,9 @@ pub struct Peer {
     bit_field: BitVec,
     signal_slot: UnboundedSender<Signal>,
     download_mutex: Arc<Mutex<Downloader>>,
+    // FIXME: I think that it is not neccessary to keep a list of requested blocks.
+    number_of_requests: i32, 
+    is_choke: bool,
 }
 
 impl Peer {
@@ -37,6 +44,8 @@ impl Peer {
             bit_field: BitVec::new(),
             signal_slot,
             download_mutex,
+            number_of_requests: 0,
+            is_choke: false,
         }
     }
 
@@ -57,12 +66,36 @@ impl Peer {
         //bincode will use 64bit to encode a string length, but we only need 1 byte,
         //so remove first seven bytes.
 
-        encoded.drain(..7);
         let mut stream = TcpStream::connect(&self.ip_addr).await?;
+        encoded.drain(..7);
         stream.write_all(encoded.as_ref()).await?;
         //Handle handshake here?
         self.handle_connection(&mut stream).await?;
         Ok(())
+    }
+
+    async fn request_more_blocks(&mut self, mut writer: &mut FramedWrite<WriteHalf<'_>, MessageCodec>) {
+        while !self.is_choke && self.number_of_requests < MAXIMUM_REQUEST {
+            let mut block_attrs : Option<(u32, u32, u32)> = None;
+            //Request fore new block right here.
+            //I will keep requesting until the request stack is full.
+            //if let Some(block_attrs) = self.download_mutex.lock().unwrap().pick_next_block(&self.bit_field) {
+            if let Ok(mut download_instance) = self.download_mutex.lock() {
+                if let Some(block_info) = download_instance.pick_next_block(&self.bit_field) {
+                    block_attrs = Some((block_info.0, block_info.1, block_info.2));
+                } 
+            } else {
+                return;
+            }
+
+            //send request message to partner
+            if let Some(attr_val) = block_attrs {
+                //println!("Client {} will request: {:?}",self.ip_addr, block_attrs);
+                let msg = Message::new(13, Some(6), MessagePlayload::Request(attr_val.0, attr_val.1, attr_val.2));
+                writer.send(msg).await;
+                self.number_of_requests += 1;
+            }
+        }
     }
 
     pub async fn handle_connection(&mut self, mut stream: &mut TcpStream) -> Result<()> {
@@ -75,9 +108,10 @@ impl Peer {
                 let (r, w) = stream.split();
                 let mut reader = FramedRead::new(r, MessageCodec::new());
                 let mut writer = FramedWrite::new(w, MessageCodec::new());
+
                 while let Some(Ok(value)) = reader.next().await {
                     // Don't need to care about keep alive message.
-                    self.handle_message(value);
+                    self.handle_message(value, &mut writer).await;
                     //try to request a piece
                     /*
                     let msg = Message::new(13, Some(6), MessagePlayload::Request(0, 0, 16384));
@@ -93,15 +127,27 @@ impl Peer {
         Ok(())
     }
 
-    fn handle_message(&mut self, received_msg: Message) {
+    async fn handle_message(&mut self, received_msg: Message, mut writer: &mut FramedWrite<WriteHalf<'_>, MessageCodec>) {
         match received_msg.payload {
             MessagePlayload::BitField(new_bit_field) => {
                 self.download_mutex.lock().unwrap().update_priority(new_bit_field.clone());
+                println!("Just updated bitfield : {}", self.ip_addr);
                 self.bit_field = new_bit_field;
+                //try to request a block here
+                self.request_more_blocks(&mut writer).await;
             }
             MessagePlayload::Have(pie_idx) => {
                 self.bit_field.set(pie_idx as usize, true);
                 self.signal_slot.send(Signal::Have(pie_idx as usize));
+                //try to request a block here
+                self.request_more_blocks(&mut writer).await;
+            }
+            MessagePlayload::Choke => {
+                self.is_choke = true;
+            }
+            MessagePlayload::UnChoke => {
+                self.is_choke = false;
+                self.request_more_blocks(&mut writer).await;
             }
             MessagePlayload::Empty => {
                 //Mean something, i don't know
@@ -115,6 +161,10 @@ impl Peer {
             MessagePlayload::Piece(pie_idx, begin, data) => {
                 // Write to disk, update manager and broadcast a MessagePayload::Have
                 // TODO: How to sync Offline field for all Peer?
+                //try to request a block here
+                self.download_mutex.lock().unwrap().write_block(pie_idx as usize, begin, &data);
+                self.number_of_requests -= 1;
+                self.request_more_blocks(&mut writer).await;
             }
             MessagePlayload::Port(port) => {
                 //We have nothing to do here. I won't support it.

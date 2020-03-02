@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
     tracker.connect().await?;
     tracker.annouce_request(-1, 0).await?;
     */
-    let mut instance = torrent_instance::TorrentInstance::new("big-buck-bunny.torrent").await?;
+    let mut instance = torrent_instance::TorrentInstance::new("test.torrent").await?;
     instance.update_announce(-1i32, 0u32).await?;
     Ok(())
 }

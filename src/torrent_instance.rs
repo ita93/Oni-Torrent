@@ -36,11 +36,12 @@ impl TorrentInstance {
 
         let (tx, mut rx) = mpsc::unbounded_channel();
 
+        
         for peer_addr in self.tracker.get_peers() {
             let ip_addr = peer_addr.to_string();
+            //let ip_addr = "88.245.98.157:30788".to_string();
             let peer_id = self.tracker.get_peer_id();
             let hash_info = self.tracker.get_hash_info();
-
             let peer_tx = tx.clone();
             let cloned_downloader = self.downloader.clone();
 
@@ -49,7 +50,6 @@ impl TorrentInstance {
                 peer.send_handshake(peer_id, hash_info).await;
             });
         }
-
         while let Some(msg) = rx.recv().await {
             println!("{:?}", msg);
         }

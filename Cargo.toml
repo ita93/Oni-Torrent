@@ -21,4 +21,5 @@ bytes = "0.5.2"
 priority-queue = "0.6.0"
 tokio = {version = "0.2.2", features = ["full"]}
 tokio-util = {version = "0.2.0", features = ["full"] }
+futures-util = "0.3.4"
 #futures-util = "0.3.1"

@@ -169,8 +169,8 @@ impl Tracker {
             .serialize(&announce_request)?;
         println!("Sending announce request");
         self.socket.send(&encoded_pkt).await?;
-        //Testing only
-        let mut data = vec![0u8; 1024];
+
+        let mut data = vec![0u8; 2048];
         let len = self.socket.recv(&mut data).await?;
         let decoded_pkt: AnnounceResponse =
             bincode::config().big_endian().deserialize(&data[..20])?;
@@ -179,7 +179,7 @@ impl Tracker {
 
         //Separate
         loop {
-            if pos >= len {
+            if (pos + 4) >= len {
                 break;
             }
 
