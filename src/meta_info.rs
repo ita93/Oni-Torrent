@@ -158,4 +158,18 @@ impl TorrentInfo {
             self.get_total_length() - self.info.piece_length * (self.get_number_of_pieces() as i64 - 1)
         }) as u32
     }
+
+    pub fn get_piece_hash(&self, piece_idx: usize) -> [u8; 20] {
+        self.info.pieces.chunks(20).skip(piece_idx).take(1).map(|v| {
+            let mut array = [0; 20];
+            let bytes = &v[..v.len()];
+            array.copy_from_slice(bytes);
+            array
+        }).next().unwrap_or([0u8; 20])
+    }
+
+    pub fn get_torrent_name(&self) -> &str {
+        &self.info.name
+    }
+
 }

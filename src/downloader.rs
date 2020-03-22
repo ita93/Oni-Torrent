@@ -1,10 +1,13 @@
 use crate::meta_info::TorrentInfo;
 use crate::piece_control::PieceControler;
+use crate::error::{Result, Error};
 use sha1::Sha1;
 use bit_vec::BitVec;
 use std::collections::HashMap;
+use std::fs::{File, OpenOptions};
+use std::path::Path;
+use std::io::{Read, Write, Seek};
 pub const BLOCKSIZE:u32 = 16384;
-//use sha1::Sha1;
 
 /// At any time the are at most 10 pieces in downloading map.
 const MAX_NO_PIECES: i32 = 10;
@@ -27,6 +30,8 @@ pub struct Downloader {
     piece_control: PieceControler, 
     downloading: HashMap<usize, DownloadingPiece>,
     meta_info: TorrentInfo,
+    //should I have a mean to manage file?
+    data_file: File,
 }
 
 /*Implementation*/
@@ -58,15 +63,21 @@ impl DownloadingPiece {
 }
 
 impl Downloader {
-    pub fn new(torrent_info: &TorrentInfo) -> Self {
+    pub fn new(torrent_info: &TorrentInfo) -> Result<Self> {
         let downloading = HashMap::new();
         let piece_control = PieceControler::new(torrent_info.get_number_of_pieces());
-
-        Self {
+        
+        let path = Path::new("downloads").join(torrent_info.get_torrent_name());
+        let data_file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
+   
+        let mut new_instance = Self {
             piece_control,
             downloading,
             meta_info: torrent_info.clone(),
-        }
+            data_file,
+        };
+        new_instance.verify()?;
+        Ok(new_instance)
     }
 
     pub fn update_priority(&mut self, bit_field: BitVec) {
@@ -82,10 +93,14 @@ impl Downloader {
         if let Some(piece) = self.downloading.get_mut(&piece_idx)  {
             let block_idx = (block_offset / BLOCKSIZE) as usize;
             piece.set_state(block_idx, BlockState::Writing);
+            //seek
+            let piece_offset = self.meta_info.get_piece_length(0) as u64 * piece_idx as u64;
+            let block_offset = piece_offset + block_offset as u64;
+            self.data_file.seek(std::io::SeekFrom::Start(block_offset as u64));
             //write block to disk
+            self.data_file.write_all(data);
             //update block state to Finished.
             piece.set_state(block_idx, BlockState::Finished);
-            //println!("Downloaded: {} * {}", piece_idx, block_idx);
             if piece.is_finished() {
                 self.piece_control.set_piece_complete(piece_idx);
                 println!("Piece {} has been finished", piece_idx);
@@ -119,18 +134,10 @@ impl Downloader {
             self.downloading.insert(piece_idx, new_piece);
             return Some(piece_idx);
         }
-
+        
+        //If PC can get here, it means there are some piece stuck in download list or download
+        //done.
         None
-    }
-
-    fn get_block_size(&self, piece_idx: usize, block_idx: usize) -> u32 {
-        let block_idx = block_idx as u32;
-        let piece_length = self.meta_info.get_piece_length(piece_idx);
-        if (block_idx + 1) * BLOCKSIZE < piece_length {
-            BLOCKSIZE
-        } else {
-            piece_length - (block_idx * BLOCKSIZE) 
-        }
     }
 
     // What should I return here?
@@ -150,6 +157,43 @@ impl Downloader {
                 None
             }
         })
+    }
+
+    // Private functions
+    fn get_block_size(&self, piece_idx: usize, block_idx: usize) -> u32 {
+        let block_idx = block_idx as u32;
+        let piece_length = self.meta_info.get_piece_length(piece_idx);
+        if (block_idx + 1) * BLOCKSIZE < piece_length {
+            BLOCKSIZE
+        } else {
+            piece_length - (block_idx * BLOCKSIZE) 
+        }
+    }
+
+    pub fn verify(&mut self) -> Result<()> {
+
+        let mut file = &self.data_file;
+        let no_pieces = self.meta_info.get_number_of_pieces();
+        for piece_idx in 0..no_pieces {
+            let piece_offset = self.meta_info.get_piece_length(0) as u64 * piece_idx as u64;
+            let length = self.meta_info.get_piece_length(piece_idx) as usize;
+            file.seek(std::io::SeekFrom::Start(piece_offset))?;
+            let mut data = Vec::with_capacity(length as usize);
+            let read_byte = file.take(length as u64).read_to_end(&mut data)?;
+            if read_byte < length {
+                //place holder.
+                file.write(&vec![0u8; length])?;
+            } else {
+                //get hash
+                let piece_hash = &self.meta_info.get_piece_hash(piece_idx);
+                let read_hash = Sha1::from(&data);
+                if read_hash.digest().bytes() == *piece_hash {
+                    self.piece_control.set_piece_complete(piece_idx);
+                    println!("Piece {} hash been download correclty", piece_idx);
+                }
+            }
+        } 
+        Ok(()) 
     }
 }
 

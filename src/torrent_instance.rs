@@ -21,8 +21,8 @@ pub struct TorrentInstance {
 impl TorrentInstance {
     pub async fn new(input: &str) -> Result<Self> {
         let torrent_content = meta_info::TorrentInfo::from_file(input)?;
+        let downloader = Arc::new(Mutex::new(Downloader::new(&torrent_content)?));
         let tracker = Tracker::from_metainfo(&torrent_content).await?;
-        let downloader = Arc::new(Mutex::new(Downloader::new(&torrent_content)));
         Ok(Self {
             tracker,
             peers: HashMap::new(),

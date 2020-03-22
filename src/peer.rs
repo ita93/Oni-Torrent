@@ -45,7 +45,7 @@ impl Peer {
             signal_slot,
             download_mutex,
             number_of_requests: 0,
-            is_choke: false,
+            is_choke: true,
         }
     }
 
@@ -69,12 +69,15 @@ impl Peer {
         let mut stream = TcpStream::connect(&self.ip_addr).await?;
         encoded.drain(..7);
         stream.write_all(encoded.as_ref()).await?;
-        //Handle handshake here?
+
         self.handle_connection(&mut stream).await?;
         Ok(())
     }
 
     async fn request_more_blocks(&mut self, mut writer: &mut FramedWrite<WriteHalf<'_>, MessageCodec>) {
+        //send an interest message.
+        writer.send(Message::new(1, Some(2), MessagePlayload::Interest)).await;
+
         while !self.is_choke && self.number_of_requests < MAXIMUM_REQUEST {
             let mut block_attrs : Option<(u32, u32, u32)> = None;
             //Request fore new block right here.
@@ -90,7 +93,6 @@ impl Peer {
 
             //send request message to partner
             if let Some(attr_val) = block_attrs {
-                //println!("Client {} will request: {:?}",self.ip_addr, block_attrs);
                 let msg = Message::new(13, Some(6), MessagePlayload::Request(attr_val.0, attr_val.1, attr_val.2));
                 writer.send(msg).await;
                 self.number_of_requests += 1;
@@ -112,11 +114,6 @@ impl Peer {
                 while let Some(Ok(value)) = reader.next().await {
                     // Don't need to care about keep alive message.
                     self.handle_message(value, &mut writer).await;
-                    //try to request a piece
-                    /*
-                    let msg = Message::new(13, Some(6), MessagePlayload::Request(0, 0, 16384));
-                    writer.send(msg).await;
-                    */
                 }
             }
             _ => {
