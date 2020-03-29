@@ -55,6 +55,13 @@ impl DownloadingPiece {
         }) 
     }
 
+    //return requested but incompleted block.
+    fn get_next_incompleted_block(&self) -> Option<usize> {
+        self.blocks.iter().position(|block_state| {
+            *block_state == BlockState::Requested
+        })
+    }
+
     fn is_finished(&self) -> bool {
         self.blocks.iter().all(|state| {
             *state == BlockState::Finished
@@ -135,9 +142,8 @@ impl Downloader {
             return Some(piece_idx);
         }
         
-        //If PC can get here, it means there are some piece stuck in download list or download
-        //done.
-        None
+        //Re-check downloading list again and pick the first piece
+        self.downloading.keys().next().map(|x| *x)
     }
 
     // What should I return here?
@@ -151,7 +157,13 @@ impl Downloader {
                         entry.set_state(block_idx, BlockState::Requested);
                         Some((piece_idx as u32, block_idx as u32 * BLOCKSIZE, self.get_block_size(piece_idx, block_idx)))
                     }
-                    _ => None,
+                    _ => {
+                        if let Some(block_idx) = entry.get_next_incompleted_block() {
+                            Some((piece_idx as u32, block_idx as u32 * BLOCKSIZE, self.get_block_size(piece_idx, block_idx)))
+                        } else {
+                            None
+                        }
+                    }
                 }
             } else {
                 None

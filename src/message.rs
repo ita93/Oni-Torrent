@@ -34,20 +34,6 @@ impl Message {
     pub fn new(len: usize, id: Option<u8>, payload: MessagePlayload) -> Self {
         Self { len, id, payload }
     }
-
-    pub fn parse(reader: impl AsyncRead + std::marker::Unpin) -> Result<()> {
-        let mut reader_buf = BufReader::new(reader);
-        let mut temp = [0; 4];
-        //read msg length (first 4 bytes)
-        reader_buf.read_exact(&mut temp);
-        let length = u32::from_be_bytes(temp);
-        //read id
-        let mut temp = [0; 1];
-        reader_buf.read_exact(&mut temp);
-        //Read payload
-
-        Ok(())
-    }
 }
 
 /// This Codec will be used to encode/decode Message

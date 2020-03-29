@@ -19,7 +19,7 @@ bit-vec = { version = "0.6.1", features = ["serde"]}
 sha1 = "0.6.0"
 bytes = "0.5.2"
 priority-queue = "0.6.0"
-tokio = {version = "0.2.2", features = ["full"]}
+tokio = {version = "0.2.2", features = ["full", "dns"]}
 tokio-util = {version = "0.2.0", features = ["full"] }
 futures-util = "0.3.4"
 #futures-util = "0.3.1"

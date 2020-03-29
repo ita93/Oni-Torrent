@@ -103,10 +103,15 @@ impl TorrentInfo {
         Ok(res)
     }
 
-    pub fn get_announce(&self) -> String {
-        match &self.announce {
-            Some(s) => s.clone(),
-            _ => String::new(),
+    pub fn get_announce(&self) -> Vec<&str> {
+        match &self.announce_list {
+            Some(list) => {
+                list.iter().flat_map(|array| array.iter()).map(|s| s.as_str()).collect()
+            },
+            _ => match &self.announce {
+                Some(s) => vec![&s],
+                _ => Vec::new(),
+            }
         }
     }
 

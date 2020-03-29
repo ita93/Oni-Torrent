@@ -63,6 +63,7 @@ pub struct PieceControler {
     piece_map : Vec<PiecePos>,
     piece_list : Vec<usize>,
     boundaries : HashMap<usize, usize>,
+    finished_piece: usize,
 }
 
 impl PieceControler {
@@ -76,11 +77,13 @@ impl PieceControler {
 
         let mut boundaries = HashMap::new();
         boundaries.insert(0, piece_list.len()-1);
+        let finished_piece = 0;
         
         Self{
             piece_map,
             piece_list,
             boundaries,
+            finished_piece,
         }
     }
     
@@ -144,9 +147,20 @@ impl PieceControler {
             None
         })
     }
+    
+    //Post condition: return true if all piece has been finished.
+    pub fn set_piece_complete(&mut self, piece_idx: usize) -> bool {
+        if self.piece_map[piece_idx].piece_status != PieceStatus::HAVE {
+            self.piece_map[piece_idx].piece_status = PieceStatus::HAVE;
+            self.finished_piece += 1;
+        }
 
-    pub fn set_piece_complete(&mut self, piece_idx: usize) {
-        self.piece_map[piece_idx].piece_status = PieceStatus::HAVE;
+        if self.finished_piece == self.piece_map.len() {
+            println!("All piece has been downloaded");
+            true
+        } else {
+            false
+        }
     }
 
     pub fn set_piece_picked(&mut self, piece_idx: usize) {

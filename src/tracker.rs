@@ -70,6 +70,7 @@ struct AnnounceResponse {
 pub struct Tracker {
     socket: UdpSocket,
     connection_id: Option<u64>, //It is not always here
+    announce_list: Vec<SocketAddr>,
     peer_id: [u8; 20],
     hash_info: [u8; 20],
     downloaded: u64,
@@ -86,14 +87,22 @@ pub struct Tracker {
 impl Tracker {
     ///@param: meta_info MetaInfo struct of this torrent.
     pub async fn from_metainfo(meta_info: &TorrentInfo) -> Result<Self> {
-        let announce_url = meta_info.get_announce();
-        let base_url = Url::parse(&announce_url)?;
-        let socket_addrs = base_url.socket_addrs(|| None)?;
+        let mut announce_list = Vec::new();
+        let announce_urls = meta_info.get_announce();
+
+        for aurl in announce_urls {
+            if &aurl[..3] != "udp" {
+                continue;
+            }
+            if let Ok(base_url) = Url::parse(aurl) {
+                let sock_addrs = base_url.socket_addrs(|| None);
+                if sock_addrs.is_ok() {
+                    announce_list.extend(sock_addrs.unwrap().iter().clone());
+                }
+            }
+        }
 
         let socket = UdpSocket::bind(&BIND_ADDR.parse::<SocketAddr>()?).await?;
-        //FIX ME: It should accept an array of address as std UDP
-        let dummy: SocketAddr = "188.241.58.209:6969".parse()?;
-        socket.connect(&dummy).await?;
 
         //Create a peer_id:
         //Firstly I generate 20 random byte, then replace first 8 bytes with -OT0001- (Oni torrent
@@ -107,6 +116,7 @@ impl Tracker {
         Ok(Self {
             socket,
             connection_id: None,
+            announce_list,
             peer_id,
             hash_info: meta_info.get_info_hash(),
             downloaded: 0,
@@ -130,7 +140,16 @@ impl Tracker {
 
         let encoded_pkt: Vec<u8> = bincode::config().big_endian().serialize(&request_pkt)?;
         println!("Sending request");
-        self.socket.send(&encoded_pkt).await?;
+        for sock_addr in &self.announce_list {
+            if let Ok(written_bytes) = self.socket.send_to(&encoded_pkt, sock_addr).await {
+                if written_bytes == encoded_pkt.len() {
+                    self.socket.connect(sock_addr).await?;
+                    println!("Connected to addr: {}", &sock_addr);
+                    break;
+                }
+            }
+        }
+        println!("Waiting for response");
 
         let data_size = std::mem::size_of::<ConnectResponse>();
         let mut data = vec![0u8; data_size];
